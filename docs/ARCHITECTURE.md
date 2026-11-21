@@ -345,6 +345,9 @@
 
 ### 4.15. Наблюдение за системой и бета
 
+- **Журналы** (`src/core/logging_setup.py`, `src/api/client_errors.py`, `scripts/trace_logs.py`; клиент —
+  `services/breadcrumbs.ts`, `services/clientErrors.ts`): json-строки с контекстом `request_id` / `user_id` / `game_id`,
+  сквозной номер запроса клиент ↔ API ↔ воркер, отчёты страницы об ошибках и перезагрузках со следом событий.
 - **Ошибки и метрики** (`src/core/observability.py`): Sentry при заданном `SENTRY_DSN`, метрики Prometheus на
   `/metrics` (наружу не публикуются). **Продуктовые метрики** без сторонних трекеров (`product_metrics.py`, отчёт —
   `scripts/product_metrics.py`). **Прозрачность:** журналы калибровки ботов и открытый API (`src/api/public.py`).

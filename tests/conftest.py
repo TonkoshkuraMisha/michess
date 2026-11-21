@@ -1,8 +1,13 @@
 # --- FILE: tests/conftest.py ---
 
 import asyncio
+import os
 
-import pytest
+# Тесты не шлют события в настоящий Sentry, даже если в .env разработчика задан SENTRY_DSN: переменная окружения
+# сильнее .env и должна быть выставлена до импорта src.main (init_sentry вызывается при импорте).
+os.environ["SENTRY_DSN"] = ""
+
+import pytest  # noqa: E402
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 

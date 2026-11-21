@@ -19,6 +19,12 @@ x-backend: &backend
     REDIS_HOST: redis
     REDIS_PORT: "6379"
   restart: unless-stopped
+  # Консоль контейнера — json-строки src/core/logging_setup.py; драйвер хранит 5 файлов по 20 МБ и ротирует их сам.
+  logging:
+    driver: json-file
+    options:
+      max-size: 20m
+      max-file: "5"
 
 services:
   db:
@@ -181,7 +187,10 @@ services:
     restart: unless-stopped
 
   web:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        VITE_SENTRY_DSN: ${VITE_SENTRY_DSN:-}  # Sentry страницы (проект regence-web); пусто — выключен
     image: regence-web:latest
     ports:
       - "${HTTP_PORT:-80}:80"

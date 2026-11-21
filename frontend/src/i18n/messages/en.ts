@@ -146,7 +146,7 @@ export const en = {
         s3Title: 'Fair-play data',
         s3Body: 'Raw move timing (move time, window focus, premoves, network delay) is kept for 90 days after a game ends so a fair-play decision can be appealed; afterwards only a summary remains.',
         s4Title: 'Sign-in and analytics',
-        s4Body: 'Staying signed in uses one HttpOnly cookie. Product analytics are our own: only the kind of event, the player and the day — no third-party trackers.',
+        s4Body: 'Staying signed in uses one HttpOnly cookie. Product analytics are our own: only the kind of event, the player and the day. Technical details of a failure (error text, page address, request numbers — no personal data and no screen recording) go to our error-tracking service Sentry (EU).',
         s5Title: 'Your control',
         s5Body: 'In Settings → My data you can download everything we hold about you and delete your account. Deletion erases personal data; games stay in your opponents’ history under an anonymous name.',
     },

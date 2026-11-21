@@ -6,6 +6,8 @@ import {Component} from 'react';
 import type {ErrorInfo, ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 import {useI18n} from '../i18n';
+import {reportClientError} from '../services/clientErrors';
+import {captureRenderError} from '../services/sentry';
 
 /** Запасной вид страницы: сообщение, перезагрузка и ссылка на главную. */
 function Fallback() {
@@ -52,6 +54,8 @@ export class PageErrorBoundary extends Component<Props, State> {
 
     componentDidCatch(error: Error, info: ErrorInfo) {
         console.error('page error', error, info.componentStack);
+        captureRenderError(error, info.componentStack);
+        void reportClientError('render', error.message, `${error.stack ?? ''}\n${info.componentStack ?? ''}`);
     }
 
     render() {

@@ -2459,6 +2459,15 @@ Stockfish при распространении образа (23.1).
 * Воркеры движка — отдельный сервис/хост с лимитом CPU; алерты по загрузке процессора и длине очереди Celery.
 * Статика — через CDN; проверка нагрузочным тестом (`scripts/loadtest`) на целевом сервере.
 
+**Сделано (21.11), журналы и Sentry:** json-журнал API/WebSocket/воркеров с контекстом `request_id` / `user_id` /
+`game_id` (`src/core/logging_setup.py`), сквозной `X-Request-ID` клиент ↔ API (500 тоже несёт его и код `internal_error`),
+след действий WebSocket (`ws_action`, код закрытия), отчёты страницы `POST /client-errors` со следом событий,
+переживающим перезагрузку (`breadcrumbs.ts`, `clientErrors.ts`), разбор `scripts/trace_logs.py`; файлы `logs/*.jsonl`
+в разработке, ротация консоли в Docker. Sentry: проекты `regence-api` и `regence-web` (организация regence-club),
+SDK на странице (`services/sentry.ts`, `@sentry/react`), теги событий из контекста журнала; тестовые ошибки с API и
+страницы дошли. **Осталось:** DSN в `.env` сервера и build-аргумент `VITE_SENTRY_DSN` при выкладке; source maps для
+читаемых трасс страницы в продакшене; алерты и дашборд в Sentry; отдельный сбор журналов (Loki/ELK) — по решению владельца.
+
 **Сделано (21.11), бэкапы:** `pg_backup.sh loop` сам проверяет восстановление раз в `BACKUP_VERIFY_EVERY_DAYS` суток
 (7) и оповещает о сбое снимка или проверки (`BACKUP_ALERT_WEBHOOK_URL`); сервис `backup-offsite` (rclone, профиль
 `offsite`) копирует дампы в объектное хранилище. Проверено вручную на dev-базе (снимок, проверка, сбой с недоступным

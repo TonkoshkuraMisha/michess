@@ -404,7 +404,7 @@ describe('GameViewer', () => {
         expect((await screen.findAllByText(/31\.4%/)).length).toBeGreaterThan(0);
         const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
         expect(post?.[0]).toMatch(/\/api\/v1\/analysis\/game\/42$/);
-        expect(post?.[1]?.headers).toEqual({Authorization: 'Bearer jwt-abc'});
+        expect(post?.[1]?.headers).toEqual({Authorization: 'Bearer jwt-abc', 'X-Request-ID': expect.any(String)});
     });
 
     it('ошибка анализа показывается текстом сервера', async () => {

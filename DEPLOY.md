@@ -116,11 +116,30 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 
 ## 6. Мониторинг
 
+**Журналы и разбор багов.** Каждая строка журнала — json (в продакшене; `LOG_FORMAT=auto`) с полями `ts`, `level`,
+`component` (api/worker), `msg` и контекстом: `request_id` (сквозной номер запроса, он же в заголовке ответа
+`X-Request-ID`), `user_id`, `game_id`, `ws_id`, `task`. Запросы пишутся строкой `http_request` (шаблон маршрута, статус,
+время), действия игрока по WebSocket — `ws_action`, подключение и закрытие — `ws_connected` / `ws_disconnected` (код
+закрытия отличает перезагрузку страницы от обрыва сети), задачи воркера — `task_started` / `task_finished` /
+`task_failed`. Страница шлёт отчёты об ошибках (`client_error`: ошибка отрисовки, необработанное исключение,
+перезагрузка страницы со следом событий до неё) — `src/api/client_errors.py`. Паролей, токенов и тел запросов в журнале нет.
+Консоль контейнеров ротируется драйвером Docker (5 файлов по 20 МБ). Разбор по признаку:
+
+    docker compose -f docker-compose.prod.yml logs --no-log-prefix api worker \
+      | python scripts/trace_logs.py game_id=20767          # или request_id=…, user_id=…, tournament_id=…
+    python scripts/trace_logs.py user_id=1 --level WARNING logs/api.jsonl logs/worker.jsonl   # разработка
+
+Цепочка по жалобе: найти `client_error`, взять `related_request_ids` и разобрать каждый номер тем же скриптом.
+`LOG_FILE` (необязательно) пишет json-файл с ротацией — в разработке его задаёт `start_dev.ps1` (`logs/`).
+
 **Ошибки — Sentry.** Задайте в `.env` `SENTRY_DSN` (проект Python в Sentry или совместимом
 GlitchTip) и перезапустите `api` и `worker`. В Sentry уходят необработанные исключения и всё, что
 логируется как ошибка: сбои WS-действий, цикла таймаутов, фонового анализа. Cookie, заголовки
 авторизации и IP не отправляются. `SENTRY_TRACES_SAMPLE_RATE` (например, `0.05`) включает
-выборочную трассировку производительности.
+выборочную трассировку производительности. Для страницы (проект `regence-web`) DSN задаётся при сборке образа:
+`VITE_SENTRY_DSN` в `.env` рядом с compose (передаётся build-аргументом сервиса `web`; в разработке — `frontend/.env`).
+Запись экрана (Session Replay) и личные данные не включены; адрес отчётов Sentry разрешён в CSP
+(`frontend/security_headers.inc`). События несут теги `request_id`, `user_id`, `game_id` — по ним ищется строка журнала.
 
 **Метрики — Prometheus.** API отдаёт `GET /metrics` (сумма по всем процессам uvicorn). Наружу
 путь не опубликован — nginx проксирует только `/api/` и `/health`; Prometheus должен быть в сети

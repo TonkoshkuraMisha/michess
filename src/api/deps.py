@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.config import settings
 from src.core.errors import ApiError
+from src.core.logging_setup import bind_log_context
 from src.core.observability import note_active_player
 from src.core.security import InvalidTokenError, decode_user_token
 from src.db import redis as redis_module
@@ -57,6 +58,7 @@ async def get_current_user(
     user = await user_from_token(db, token)
     if user is None:
         raise ApiError(status.HTTP_401_UNAUTHORIZED, "not_authenticated", headers={"WWW-Authenticate": "Bearer"})
+    bind_log_context(user_id=user.id)  # каждая строка журнала этого запроса несёт игрока (src/core/logging_setup.py)
     await note_active_player(user.id)  # для метрики «процессор на активного игрока» (таск 23.3)
     await product_metrics.mark_active(session_factory, user.id)  # удержание D1/D7/D30 (таск 23.5)
     return user

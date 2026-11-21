@@ -11,6 +11,7 @@ import {uiMessage} from '../i18n';
 import type {MessageKey} from '../i18n';
 import {readApiErrorOr, UiError} from './apiErrors';
 import {getToken} from './authToken';
+import {addBreadcrumb, CLIENT_ERRORS_PATH, newRequestId} from './breadcrumbs';
 
 /** HTTP-ответ «без содержимого»: такой запрос возвращает undefined, тела у него нет. */
 const NO_CONTENT = 204;
@@ -27,6 +28,11 @@ export const apiUrl = (path: string) => `${API_BASE_URL}/api/v1${path}`;
  */
 export async function apiFetch(path: string, init: RequestInit = {}, fallback: Fallback = 'common.networkError'): Promise<Response> {
     const token = getToken();
+    // Сквозной номер запроса: сервер пишет его в каждую строку журнала и возвращает в X-Request-ID; он же — в отчётах
+    // об ошибках страницы (clientErrors.ts). Запросы самих отчётов в след не пишутся.
+    const requestId = newRequestId();
+    const tracked = path !== CLIENT_ERRORS_PATH;
+    const label = `${init.method ?? 'GET'} ${path.split('?')[0]}`;
     let res: Response;
     try {
         res = await fetch(apiUrl(path), {
@@ -34,12 +40,15 @@ export async function apiFetch(path: string, init: RequestInit = {}, fallback: F
             headers: {
                 ...(typeof init.body === 'string' ? {'Content-Type': 'application/json'} : {}),
                 ...(token ? {Authorization: `Bearer ${token}`} : {}),
+                'X-Request-ID': requestId,
                 ...(init.headers as Record<string, string> | undefined),
             },
         });
     } catch {
+        if (tracked) addBreadcrumb('request', `${label} (no connection)`, {request_id: requestId});
         throw new UiError(uiMessage('common.noConnection'));
     }
+    if (tracked) addBreadcrumb('request', label, {status: res.status, request_id: requestId});
     if (!res.ok) throw new UiError(await readApiErrorOr(res, typeof fallback === 'function' ? fallback(res.status) : fallback));
     return res;
 }

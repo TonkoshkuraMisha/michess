@@ -7,6 +7,9 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# DSN проекта Sentry для страницы (необязательно): подставляется в сборку, без него Sentry на странице выключен.
+ARG VITE_SENTRY_DSN=
+ENV VITE_SENTRY_DSN=$VITE_SENTRY_DSN
 # VITE_API_URL / VITE_WS_URL не задаём: в продакшен-сборке API берётся с того же домена.
 RUN npm run build
 

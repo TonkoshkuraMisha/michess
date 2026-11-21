@@ -29,6 +29,7 @@ from src.api import (
     beta,
     bots,
     chess960,
+    client_errors,
     conferences,
     exam,
     feed,
@@ -61,6 +62,7 @@ from src.api.profile import router as profile_router
 from src.api.websockets import router as ws_router
 from src.core.config import settings
 from src.core.errors import validation_error_items
+from src.core.logging_setup import REQUEST_ID_HEADER, request_log_middleware, setup_logging
 from src.core.observability import http_metrics_middleware, init_sentry, metrics_response, refresh_active_players
 from src.db import redis as redis_module
 from src.db.session import AsyncSessionLocal
@@ -68,10 +70,7 @@ from src.services.connection_manager import manager
 from src.services.engine_pool import close_all_engine_pools
 from src.services.game_state import state_manager
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+setup_logging("api")  # формат, файл и контекст записей — src/core/logging_setup.py
 logger = logging.getLogger(__name__)
 
 init_sentry("api")
@@ -125,9 +124,12 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Номер запроса виден клиенту и из другого адреса (Vite :3000 → API :8000): он уходит в отчёт об ошибке.
+        expose_headers=[REQUEST_ID_HEADER],
     )
 
     app.middleware("http")(http_metrics_middleware)
+    app.middleware("http")(request_log_middleware)  # последним — он снаружи: номер запроса есть у всего, что ниже
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -169,6 +171,7 @@ def create_app() -> FastAPI:
     app.include_router(workout.router, prefix="/api/v1/workout", tags=["training"])
     app.include_router(exam.router, prefix="/api/v1/exam", tags=["training"])
     app.include_router(account.router, prefix=settings.API_V1_STR)
+    app.include_router(client_errors.router, prefix=settings.API_V1_STR)
 
     return app
 
