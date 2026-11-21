@@ -3,17 +3,19 @@
 // арены — полноэкранное окно. Призёру (1–3 место): лучи, большой кубок цвета места (золото, серебро, бронза) с бликом,
 // лавровый венок, конфетти и фанфары. Остальным — спокойный значок места без фанфар. Рядом с кубком — сводка игрока
 // (очки, победы/ничьи/поражения, рейтинг) и прокручиваемая таблица всех участников с аватарами, рейтингами и очками;
-// строка игрока подсвечена и прокручена в видимую область (строки готовит services/tournamentResults.ts). Всё рисуется кодом (SVG, canvas, Web Audio) — без чужих картинок и записей. Показывается один раз на
+// строка игрока подсвечена и прокручена в видимую область (строки готовит services/tournamentResults.ts). Над таблицей —
+// сводка турнира (партий, ничьих, побед белых — как шапка итогов lichess), под именем — победы/ничьи/поражения (турнир)
+// или перформанс (арена), снизу — «Скачать CSV» (как результаты на chess.com). Всё рисуется кодом (SVG, canvas, Web Audio) — без чужих картинок и записей. Показывается один раз на
 // турнир (shouldCelebrate / markCelebrated; ключ — номер турнира или строка вида «arena-5» для арен, 33.5); повторить
 // можно кнопкой. При «уменьшить движение» — без конфетти и вращения.
 // Единственное хранилище — localStorage с ключом regence_celebrated_<id>. Фанфары — services/soundEngine.ts.
 // Используют TournamentsPage.tsx, TournamentGameBar.tsx и arena/ArenaPages.tsx.
 
 import {useEffect, useRef} from 'react';
-import {X} from 'lucide-react';
+import {Download, X} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {soundEngine} from '../../services/soundEngine';
-import type {ResultRow, ResultStats} from '../../services/tournamentResults';
+import {type ResultRow, type ResultStats, resultsCsv, type TournamentSummary} from '../../services/tournamentResults';
 import {PlayerAvatar} from '../PlayerAvatar';
 
 // Префикс ключа localStorage: отметка «праздник для этого турнира уже показан».
@@ -245,6 +247,24 @@ export interface CelebrationProps {
     rows?: ResultRow[];
     /** Сводка игрока над таблицей. */
     stats?: ResultStats | null;
+    /** Сводка турнира целиком; у арены её нет. */
+    summary?: TournamentSummary | null;
+    /** Подпись детали под именем — «перф.» у арены; у турнира там победы/ничьи/поражения. */
+    detailLabel?: string;
+}
+
+/** Скачивает таблицу итогов файлом CSV (без сервера: файл собирается в браузере). */
+function downloadCsv(rows: ResultRow[], title: string): void {
+    try {
+        const url = URL.createObjectURL(new Blob(['\ufeff' + resultsCsv(rows)], {type: 'text/csv;charset=utf-8'}));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${title.replace(/[^\p{L}\p{N}]+/gu, '-')}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+    } catch {
+        // Браузер без Blob/URL — кнопка просто ничего не делает.
+    }
 }
 
 /** Значок места вне тройки: круг с номером вместо кубка. */
@@ -259,7 +279,9 @@ function PlaceBadge({place}: { place: number }) {
 }
 
 /** Таблица участников: место, аватар, имя, рейтинг, очки; прокручивается, строка игрока подсвечена и видна сразу. */
-function ResultsTable({rows}: { rows: ResultRow[] }) {
+function ResultsTable({rows, summary, title, detailLabel}: {
+    rows: ResultRow[]; summary?: TournamentSummary | null; title: string; detailLabel?: string;
+}) {
     const {t} = useI18n();
     const mineRef = useRef<HTMLLIElement>(null);
     useEffect(() => {
@@ -270,18 +292,34 @@ function ResultsTable({rows}: { rows: ResultRow[] }) {
             <h3 className="px-4 py-2 text-sm font-bold uppercase tracking-wide text-amber-200/90 border-b border-amber-200/15">
                 {t('celebration.standings')}
             </h3>
+            {summary && (
+                <p className="px-4 py-1.5 text-xs text-amber-200/80 border-b border-amber-200/10" data-testid="celebration-summary">
+                    {t('celebration.summary', {games: summary.games, draws: summary.drawPercent, white: summary.whitePercent})}
+                </p>
+            )}
             <ol className="overflow-y-auto max-h-[38vh] lg:max-h-[56vh] divide-y divide-amber-200/10">
                 {rows.map((r) => (
                     <li key={r.key} ref={r.mine ? mineRef : undefined} data-testid={`celebration-row-${r.key}`} aria-current={r.mine ? 'true' : undefined}
                         className={`flex items-center gap-3 px-4 py-2 text-left ${r.mine ? 'bg-amber-300/20 font-bold' : ''}`}>
                         <span className="w-7 text-right font-mono text-amber-200/80">{r.place}</span>
                         <PlayerAvatar username={r.name} avatar={r.avatar} className="w-8 h-8 rounded-full"/>
-                        <span className="flex-1 truncate text-amber-50">{r.name}</span>
+                        <span className="flex-1 min-w-0">
+                            <span className="block truncate text-amber-50">{r.name}</span>
+                            {r.detail && (
+                                <span className="block text-[11px] font-normal text-amber-200/60" data-testid={`celebration-detail-${r.key}`}>
+                                    {detailLabel ? `${detailLabel} ${r.detail}` : r.detail}
+                                </span>
+                            )}
+                        </span>
                         {r.rating !== null && <span className="text-xs text-amber-200/70 font-mono">{r.rating}</span>}
                         <span className="w-12 text-right font-mono text-amber-100">{r.score}</span>
                     </li>
                 ))}
             </ol>
+            <button type="button" onClick={() => downloadCsv(rows, title)} data-testid="celebration-csv"
+                    className="flex items-center justify-center gap-1.5 px-4 py-2 text-sm text-amber-200 border-t border-amber-200/15 hover:bg-amber-200/10 cursor-pointer">
+                <Download size={14}/> {t('celebration.downloadCsv')}
+            </button>
         </section>
     );
 }
@@ -310,7 +348,7 @@ function StatsStrip({stats}: { stats: ResultStats }) {
  * Полноэкранный экран итогов: у призёра играют фанфары и сыплется конфетти; закрывается кнопкой или Escape.
  * Место 1–3 — кубок цвета места; ниже — значок с номером. С rows рядом с кубком появляется таблица участников.
  */
-export function TournamentCelebration({place, title, size, onClose, rows, stats}: CelebrationProps) {
+export function TournamentCelebration({place, title, size, onClose, rows, stats, summary, detailLabel}: CelebrationProps) {
     const {t} = useI18n();
     const podium = place >= 1 && place <= 3;
     const rank = (Math.min(Math.max(place, 1), 3)) as 1 | 2 | 3;
@@ -376,7 +414,7 @@ export function TournamentCelebration({place, title, size, onClose, rows, stats}
                         {t('celebration.continue')}
                     </button>
                 </div>
-                {withTable && <div className="w-full lg:w-[26rem] lg:shrink-0"><ResultsTable rows={rows}/></div>}
+                {withTable && <div className="w-full lg:w-[26rem] lg:shrink-0"><ResultsTable rows={rows} summary={summary} title={title} detailLabel={detailLabel}/></div>}
             </div>
             <button type="button" onClick={onClose} aria-label={t('celebration.continue')}
                     className="fixed top-3 right-3 z-[103] p-2 rounded-full bg-black/40 text-white hover:bg-black/60">

@@ -20,6 +20,8 @@ export interface ResultRow {
     mine: boolean;
     /** Код аватара (PlayerAvatar); пусто — аватар вычисляется из имени. */
     avatar?: string | null;
+    /** Мелкая подпись под именем: победы/ничьи/поражения в турнире, перформанс в арене (как всплывающие итоги chess.com и перформанс lichess). */
+    detail?: string;
 }
 
 /** Сводка игрока: подписи берёт клиент (ключи celebration.stats.*), здесь только значения. */
@@ -31,9 +33,30 @@ export interface ResultStats {
     rating: number | null;
 }
 
+/** Сводка турнира целиком над таблицей (как шапка итогов lichess): сколько партий, доля ничьих и побед белых. */
+export interface TournamentSummary {
+    games: number;
+    drawPercent: number;
+    whitePercent: number;
+}
+
 /** Очки одним числом для людей: 3 → «3», 2.5 → «2,5» (запятая — как принято в шахматных таблицах). */
 export function formatPoints(points: number): string {
     return String(points).replace('.', ',');
+}
+
+/** Победы, ничьи и поражения участника по сыгранным партиям турнира. */
+function seatRecord(tournament: Tournament, seat: number): { wins: number; draws: number; losses: number } {
+    let wins = 0;
+    let draws = 0;
+    let losses = 0;
+    for (const g of tournament.games) {
+        if (g.result === null || (g.white_seat !== seat && g.black_seat !== seat)) continue;
+        if (g.result === '1/2-1/2') draws++;
+        else if ((g.result === '1-0') === (g.white_seat === seat)) wins++;
+        else losses++;
+    }
+    return {wins, draws, losses};
 }
 
 /** Итоговая таблица турнира: по таблице сервера, а на выбывание (таблицы очков нет) — по итоговым местам участников. */
@@ -42,9 +65,11 @@ export function tournamentRows(tournament: Tournament, tr: I18n['t'], myName?: s
     const row = (seat: number, place: number, score: string): ResultRow | null => {
         const p = player(seat);
         if (!p) return null;
+        const record = seatRecord(tournament, seat);
         return {
             key: seat, place, name: participantName(p, tr, myName), rating: p.rating, score,
             mine: seat === tournament.my_seat,
+            detail: record.wins + record.draws + record.losses > 0 ? `${record.wins}/${record.draws}/${record.losses}` : undefined,
         };
     };
     const rows = tournament.standings.length > 0
@@ -57,15 +82,7 @@ export function tournamentRows(tournament: Tournament, tr: I18n['t'], myName?: s
 export function tournamentStats(tournament: Tournament): ResultStats | null {
     const seat = tournament.my_seat;
     if (seat == null) return null;
-    let wins = 0;
-    let draws = 0;
-    let losses = 0;
-    for (const g of tournament.games) {
-        if (g.result === null || (g.white_seat !== seat && g.black_seat !== seat)) continue;
-        if (g.result === '1/2-1/2') draws++;
-        else if ((g.result === '1-0') === (g.white_seat === seat)) wins++;
-        else losses++;
-    }
+    const {wins, draws, losses} = seatRecord(tournament, seat);
     const mine = tournament.standings.find((s) => s.seat === seat);
     const points = mine ? mine.points : wins + draws / 2;
     return {
@@ -74,10 +91,30 @@ export function tournamentStats(tournament: Tournament): ResultStats | null {
     };
 }
 
+/** Сводка турнира: сыгранные партии, доля ничьих и побед белых; null — партий ещё нет. */
+export function tournamentSummary(tournament: Tournament): TournamentSummary | null {
+    const played = tournament.games.filter((g) => g.result !== null);
+    if (played.length === 0) return null;
+    const share = (count: number) => Math.round((100 * count) / played.length);
+    return {
+        games: played.length,
+        drawPercent: share(played.filter((g) => g.result === '1/2-1/2').length),
+        whitePercent: share(played.filter((g) => g.result === '1-0').length),
+    };
+}
+
 /** Итоговая таблица арены: очки арены, рейтинг игрока на входе; свою строку определяет имя игрока. */
-export function arenaRows(standings: ArenaStanding[], myName: string | null): ResultRow[] {
+export function arenaRows(standings: ArenaStanding[], myName: string | null | undefined): ResultRow[] {
     return standings.filter((s) => s.games > 0).map((s) => ({
         key: s.username, place: s.place, name: s.username, rating: s.rating, score: String(s.score),
-        mine: myName !== null && s.username === myName,
+        mine: myName != null && s.username === myName,
+        detail: s.performance != null ? `${s.performance}` : undefined,
     }));
+}
+
+/** Таблица итогов в CSV для скачивания (chess.com отдаёт результаты файлом): место, участник, рейтинг, очки; значения в кавычках. */
+export function resultsCsv(rows: ResultRow[]): string {
+    const quote = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
+    const lines = rows.map((r) => [r.place, r.name, r.rating ?? '', r.score].map(quote).join(','));
+    return ['place,name,rating,score', ...lines].join('\r\n');
 }

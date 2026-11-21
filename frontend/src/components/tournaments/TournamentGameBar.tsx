@@ -20,7 +20,7 @@ import {
 } from '../../services/tournaments';
 import type {Tournament, TournamentSummary} from '../../services/tournaments';
 import {eventTitle} from '../../services/timeMachine';
-import {tournamentRows, tournamentStats} from '../../services/tournamentResults';
+import {tournamentRows, tournamentStats, tournamentSummary} from '../../services/tournamentResults';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
 
 // Период опроса сервера (мс), пока после партии ждём запись итога и доигрывание тура ботами.
@@ -172,7 +172,7 @@ export function TournamentGameBar({tournamentId, tournamentGameId, gameOver}: {
             {showTable && <StandingsOverlay tournament={tournament} onClose={() => setShowTable(false)}/>}
             {celebrating && myPlace !== null && (
                 <TournamentCelebration place={myPlace} title={tournamentTitle(tournament, t)} size={tournament.size}
-                                       rows={tournamentRows(tournament, t)} stats={tournamentStats(tournament)}
+                                       rows={tournamentRows(tournament, t)} stats={tournamentStats(tournament)} summary={tournamentSummary(tournament)}
                                        onClose={closeCelebration}/>
             )}
         </div>

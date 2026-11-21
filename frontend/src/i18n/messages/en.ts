@@ -2428,6 +2428,9 @@ export const en = {
         finished: 'Tournament finished',
         standings: 'Final standings',
         results: 'Results',
+        summary: '{games} games · {draws}% draws · White won {white}%',
+        downloadCsv: 'Download results (CSV)',
+        perfShort: 'perf.',
         stats: {points: 'Points', record: 'W / D / L', rating: 'Rating'},
     },
     social: {

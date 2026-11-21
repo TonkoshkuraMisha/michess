@@ -33,7 +33,7 @@ import type {
 } from '../../services/tournaments';
 import {ladderOpponentName} from '../../config/players';
 import {Diploma} from './Diploma';
-import {tournamentRows, tournamentStats} from '../../services/tournamentResults';
+import {tournamentRows, tournamentStats, tournamentSummary} from '../../services/tournamentResults';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
 import {tournamentTitle} from './TournamentGameBar';
 import {Career} from './Career';
@@ -536,7 +536,7 @@ export function TournamentView() {
             )}
             {celebrating && me?.place != null && (
                 <TournamentCelebration place={me.place} title={tournamentTitle(tournament, t)} size={tournament.size}
-                                       rows={tournamentRows(tournament, t, myName || undefined)} stats={tournamentStats(tournament)}
+                                       rows={tournamentRows(tournament, t, myName || undefined)} stats={tournamentStats(tournament)} summary={tournamentSummary(tournament)}
                                        onClose={closeCelebration}/>
             )}
         </div>

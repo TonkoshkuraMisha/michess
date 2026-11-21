@@ -50,8 +50,8 @@ async def test_pairing_and_scores(client, db_session, running, test_user_1, test
         assert client.post(f"{API}/{running.id}/join", headers=auth(token)).status_code == 200
     assert client.post(f"{API}/{running.id}/ready", headers=auth(token_user_1)).json() == {"waiting": True}
     view = client.get(f"{API}/{running.id}", headers=auth(token_user_1)).json()
-    assert view["me"] == {"joined": True, "waiting": True, "current_game_id": None, "division_arena_id": None,
-                          "reminder": False, "podium_place": None}
+    assert view["me"] == {"username": test_user_1.username, "joined": True, "waiting": True, "current_game_id": None,
+                          "division_arena_id": None, "reminder": False, "podium_place": None}
 
     started = client.post(f"{API}/{running.id}/ready", headers=auth(token_user_2)).json()
     game_id = started["game_id"]
