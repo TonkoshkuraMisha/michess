@@ -149,12 +149,35 @@ services:
       PGHOST: db
       BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_VERIFY_EVERY_DAYS: ${BACKUP_VERIFY_EVERY_DAYS:-7}
+      BACKUP_ALERT_WEBHOOK_URL: ${BACKUP_ALERT_WEBHOOK_URL:-}
     volumes:
       - ./scripts/backup/pg_backup.sh:/usr/local/bin/pg_backup.sh:ro
       - ${BACKUP_DIR:-./backups}:/backups
     depends_on:
       migrate:
         condition: service_completed_successfully
+    restart: unless-stopped
+
+  # Копия снимков вне сервера (rclone: S3, Backblaze B2, Google Drive, SFTP и др.). Включается профилем:
+  #   docker compose -f docker-compose.prod.yml --profile offsite up -d
+  # Хранилище `offsite` описывается переменными RCLONE_CONFIG_OFFSITE_* в .env (DEPLOY, раздел 5); пока их нет,
+  # сервис не нужен. Копируются только готовые regence_*.dump: `.partial` и служебные файлы не попадают.
+  backup-offsite:
+    image: rclone/rclone:1.68.2
+    profiles: ["offsite"]
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while true; do
+          rclone copy /backups "$${BACKUP_OFFSITE_PATH:?}" --include 'regence_*.dump' --exclude '*'             || echo "backup-offsite: ERROR: rclone copy failed"
+          sleep "$$(( $${BACKUP_OFFSITE_INTERVAL_HOURS:-24} * 3600 ))"
+        done
+    env_file: .env
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups:ro
+    depends_on:
+      - backup
     restart: unless-stopped
 
   web:
