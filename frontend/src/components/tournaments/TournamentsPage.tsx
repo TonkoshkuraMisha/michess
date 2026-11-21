@@ -33,6 +33,7 @@ import type {
 } from '../../services/tournaments';
 import {ladderOpponentName} from '../../config/players';
 import {Diploma} from './Diploma';
+import {tournamentRows, tournamentStats, tournamentSummary} from '../../services/tournamentResults';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
 import {tournamentTitle} from './TournamentGameBar';
 import {Career} from './Career';
@@ -247,12 +248,12 @@ export function TournamentView() {
     const [myName, setMyName] = useState('');
     const [notice, setNotice] = useState<UiMessage | null>(null);
     const [reloadKey, setReloadKey] = useState(0);
-    // Праздник призёра (17.11): при первом взгляде на законченный турнир с местом в тройке; повтор — кнопкой.
+    // Экран итогов (17.11, таблица — 21.11): при первом взгляде на законченный турнир, где у игрока есть место; повтор — кнопкой.
     const [celebrating, setCelebrating] = useState(false);
     const finishedPlace = tournament?.status === 'finished'
         ? tournament.players.find((p) => p.seat === tournament.my_seat)?.place ?? null : null;
     useEffect(() => {
-        if (tournament && finishedPlace !== null && finishedPlace <= 3 && shouldCelebrate(tournament.id)) setCelebrating(true);
+        if (tournament && finishedPlace !== null && shouldCelebrate(tournament.id)) setCelebrating(true);
     }, [tournament, finishedPlace]);
     const closeCelebration = useCallback(() => {
         markCelebrated(id);
@@ -527,14 +528,15 @@ export function TournamentView() {
                              : t(`tournaments.formats.${tournament.format}`)} size={tournament.size}
                          date={new Date(tournament.finished_at ?? tournament.created_at).toLocaleDateString(dateLocale.code)}/>
             )}
-            {tournament.status === 'finished' && me?.place != null && me.place <= 3 && (
+            {tournament.status === 'finished' && me?.place != null && (
                 <button type="button" onClick={() => setCelebrating(true)} data-testid="celebrate-again"
                         className="self-center px-4 py-2 rounded-full bg-amber-700 text-white font-bold hover:bg-amber-600 cursor-pointer">
-                    {t('celebration.again')}
+                    {t(me.place <= 3 ? 'celebration.again' : 'celebration.results')}
                 </button>
             )}
             {celebrating && me?.place != null && (
                 <TournamentCelebration place={me.place} title={tournamentTitle(tournament, t)} size={tournament.size}
+                                       rows={tournamentRows(tournament, t, myName || undefined)} stats={tournamentStats(tournament)} summary={tournamentSummary(tournament)}
                                        onClose={closeCelebration}/>
             )}
         </div>

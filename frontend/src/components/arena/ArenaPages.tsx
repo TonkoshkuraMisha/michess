@@ -22,6 +22,7 @@ import {arenasApi, clock, conferenceKey, controlLabel, secondsUntil} from '../..
 import type {ArenaDetail, ArenaInfo} from '../../services/arenas';
 import {ArenaLeague} from './ArenaLeague';
 import {conferenceName, MatchBoards} from './ConferenceMatches';
+import {arenaRows} from '../../services/tournamentResults';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from '../tournaments/TournamentCelebration';
 
 // Период опроса «есть ли партия» (мс), пока игрок нажал «Играть» и ждёт пару.
@@ -153,10 +154,13 @@ export function ArenaPage() {
         };
     }, [searching, id, navigate]);
 
-    // Праздник призёра (33.5): итоги окончательные и игрок в тройке — один раз на арену.
-    const podium = arena?.status === 'finished' ? arena.me?.podium_place ?? null : null;
+    // Экран итогов (33.5, таблица — 21.11): итоги окончательные и игрок сыграл хотя бы партию — один раз на арену.
+    // Место призёра — из наград сервера; остальным — строка их имени в таблице итогов.
+    const myName = arena?.me?.username;
+    const myRow = arena?.standings.find((s) => s.username === myName && s.games > 0);
+    const podium = arena?.status === 'finished' ? arena.me?.podium_place ?? myRow?.place ?? null : null;
     useEffect(() => {
-        if (podium !== null && podium <= 3 && shouldCelebrate(celebrationKey)) setCelebrating(true);
+        if (podium !== null && shouldCelebrate(celebrationKey)) setCelebrating(true);
     }, [podium, celebrationKey]);
     const closeCelebration = useCallback(() => {
         markCelebrated(celebrationKey);
@@ -293,7 +297,8 @@ export function ArenaPage() {
             )}
             {celebrating && podium !== null && (
                 <TournamentCelebration place={podium} title={arenaName(arena, t)}
-                                       size={arena.standings.filter((s) => s.games > 0).length} onClose={closeCelebration}/>
+                                       size={arena.standings.filter((s) => s.games > 0).length} onClose={closeCelebration}
+                                       rows={arenaRows(arena.standings, myName)} detailLabel={t('celebration.perfShort')}/>
             )}
         </div>
     );

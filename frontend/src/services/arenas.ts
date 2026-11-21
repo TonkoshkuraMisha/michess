@@ -116,8 +116,10 @@ export interface ArenaDetail extends ArenaInfo {
      * division_arena_id: игрок в другом делении этой арены — клиент переходит туда (33.2).
      * reminder: игрок просил напомнить о начале этой арены (33.4).
      * podium_place: призовое место 1–3 после окончательных итогов (33.5); null — не призёр или итогов ещё нет.
+     * username: имя игрока — по нему экран итогов подсвечивает его строку в таблице.
      */
     me: {
+        username?: string;
         joined: boolean; waiting: boolean; current_game_id: number | null; division_arena_id?: number | null;
         reminder?: boolean; podium_place?: number | null;
     } | null;

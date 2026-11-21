@@ -114,7 +114,8 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
             for item in await service.divisions(db, arena):
                 if item.id != arena.id and await service._player(db, item.id, user_id) is not None:
                     division_id = item.id
-        me = {"joined": joined, "waiting": user_id in await service.waiting_ids(arena.id),
+        me = {"username": getattr(await db.get(User, user_id), "username", None),  # по имени итоги находят строку игрока
+              "joined": joined, "waiting": user_id in await service.waiting_ids(arena.id),
               "current_game_id": await service.current_game(db, arena.id, user_id) if joined else None,
               "division_arena_id": division_id,
               "reminder": await service.has_reminder(db, arena.id, user_id),

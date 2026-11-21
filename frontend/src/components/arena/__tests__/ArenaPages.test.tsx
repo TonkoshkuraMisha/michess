@@ -287,12 +287,27 @@ describe('праздник призёра арены', () => {
         expect(screen.queryByTestId('tournament-celebration')).not.toBeInTheDocument();
     });
 
-    it('без призового места праздника нет', async () => {
+    it('не сыграл ни партии — экрана итогов нет', async () => {
         const body = {...RUNNING, id: 10, status: 'finished', standings: [],
-            me: {joined: true, waiting: false, current_game_id: null, podium_place: null}};
+            me: {username: 'me', joined: true, waiting: false, current_game_id: null, podium_place: null}};
         vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => body} as Response)));
         routes('/arenas/10');
         expect(await screen.findByTestId('arena-page')).toBeInTheDocument();
         expect(screen.queryByTestId('tournament-celebration')).not.toBeInTheDocument();
+    });
+
+    it('сыгравший вне тройки видит итоги: свою строку в таблице, перформанс и общий зачёт', async () => {
+        const standing = (place: number, username: string, games: number) => ({
+            place, username, score: 10 - place, games, wins: 1, fire: false, rating: 1500 + place, performance: 1700,
+        });
+        const body = {...RUNNING, id: 11, status: 'finished',
+            standings: [standing(1, 'a', 4), standing(2, 'b', 4), standing(3, 'c', 4), standing(4, 'me', 3)],
+            me: {username: 'me', joined: true, waiting: false, current_game_id: null, podium_place: null}};
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => body} as Response)));
+        routes('/arenas/11');
+        expect(await screen.findByTestId('celebration-title')).toHaveTextContent('Турнир завершён');
+        expect(screen.getByTestId('celebration-row-me')).toHaveAttribute('aria-current', 'true');
+        expect(screen.getByTestId('celebration-detail-me')).toHaveTextContent('перф. 1700');
+        expect(screen.getByText('Место 4 из 4')).toBeInTheDocument();
     });
 });

@@ -20,6 +20,7 @@ import {
 } from '../../services/tournaments';
 import type {Tournament, TournamentSummary} from '../../services/tournaments';
 import {eventTitle} from '../../services/timeMachine';
+import {tournamentRows, tournamentStats, tournamentSummary} from '../../services/tournamentResults';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
 
 // Период опроса сервера (мс), пока после партии ждём запись итога и доигрывание тура ботами.
@@ -94,11 +95,11 @@ export function TournamentGameBar({tournamentId, tournamentGameId, gameOver}: {
         return () => window.clearTimeout(timer);
     }, [waiting, tournament, load]);
 
-    // Последняя партия сыграна, турнир закончен, игрок в тройке — праздник прямо у доски (один раз на турнир).
+    // Последняя партия сыграна, турнир закончен — экран итогов прямо у доски (один раз на турнир).
     const myPlace = tournament?.players.find((p) => p.seat === tournament.my_seat)?.place ?? null;
     const [celebrating, setCelebrating] = useState(false);
     useEffect(() => {
-        if (gameOver && tournament?.status === 'finished' && myPlace !== null && myPlace <= 3 && shouldCelebrate(tournament.id)) {
+        if (gameOver && tournament?.status === 'finished' && myPlace !== null && shouldCelebrate(tournament.id)) {
             setCelebrating(true);
         }
     }, [gameOver, tournament, myPlace]);
@@ -171,6 +172,7 @@ export function TournamentGameBar({tournamentId, tournamentGameId, gameOver}: {
             {showTable && <StandingsOverlay tournament={tournament} onClose={() => setShowTable(false)}/>}
             {celebrating && myPlace !== null && (
                 <TournamentCelebration place={myPlace} title={tournamentTitle(tournament, t)} size={tournament.size}
+                                       rows={tournamentRows(tournament, t)} stats={tournamentStats(tournament)} summary={tournamentSummary(tournament)}
                                        onClose={closeCelebration}/>
             )}
         </div>
