@@ -31,15 +31,15 @@ describe('apiRequest', () => {
         const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toMatch(/\/api\/v1\/feed\/posts$/);
         expect(init.method).toBe('POST');
-        expect(init.headers).toEqual({'Content-Type': 'application/json', Authorization: 'Bearer jwt'});
+        expect(init.headers).toEqual({'Content-Type': 'application/json', Authorization: 'Bearer jwt', 'X-Request-ID': expect.stringMatching(/^[a-z0-9]{16}$/)});
     });
 
     it('без входа и без тела — без заголовков; свои заголовки дополняют общие', async () => {
         const fetchMock = stubFetch({});
         await apiRequest('/watch/archive');
         await apiRequest('/watch/archive', {headers: {'X-Test': '1'}});
-        expect((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers).toEqual({});
-        expect((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].headers).toEqual({'X-Test': '1'});
+        expect((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].headers).toEqual({'X-Request-ID': expect.any(String)});
+        expect((fetchMock.mock.calls[1] as unknown as [string, RequestInit])[1].headers).toEqual({'X-Request-ID': expect.any(String), 'X-Test': '1'});
     });
 
     it('204 — без тела', async () => {

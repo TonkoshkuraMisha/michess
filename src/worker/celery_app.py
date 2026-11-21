@@ -13,14 +13,52 @@
 сигналы ниже, правила — src/core/observability.start_worker_metrics_server.
 """
 
+import logging
+
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import worker_init, worker_process_shutdown
+from celery.signals import setup_logging, task_failure, task_postrun, task_prerun, worker_init, worker_process_shutdown
 
 from src.core.config import settings
+from src.core.logging_setup import end_log_context, start_log_context
+from src.core.logging_setup import setup_logging as configure_logging
 from src.core.observability import forget_worker_process, init_sentry, start_worker_metrics_server
 
 init_sentry("worker")
+
+
+# Токены контекстов журнала по id задач: prerun открывает контекст, postrun закрывает (src/core/logging_setup.py).
+_task_log_tokens: dict[str, object] = {}
+_task_logger = logging.getLogger("regence.task")
+
+
+@setup_logging.connect
+def _configure_worker_logging(**_) -> None:
+    """Единый формат журнала воркера (json/text, файл) вместо собственной настройки Celery."""
+    configure_logging("worker")
+
+
+@task_prerun.connect
+def _bind_task_context(task_id=None, task=None, args=None, **_) -> None:
+    """Каждая строка журнала внутри задачи несёт её имя и id; первый числовой аргумент — id партии (game_id)."""
+    game_id = args[0] if args and isinstance(args[0], int) else None
+    _task_log_tokens[task_id] = start_log_context(task=getattr(task, "name", None), task_id=task_id, game_id=game_id)
+    _task_logger.info("task_started")
+
+
+@task_postrun.connect
+def _release_task_context(task_id=None, state=None, **_) -> None:
+    """Закрывает контекст задачи; итог (state) пишется строкой task_finished."""
+    _task_logger.info("task_finished", extra={"state": state})
+    token = _task_log_tokens.pop(task_id, None)
+    if token is not None:
+        end_log_context(token)  # type: ignore[arg-type]
+
+
+@task_failure.connect
+def _log_task_failure(task_id=None, exception=None, einfo=None, **_) -> None:
+    """Сбой задачи — со стеком: без него воркер писал бы только строку Celery без контекста."""
+    _task_logger.error("task_failed", exc_info=(type(exception), exception, getattr(einfo, "tb", None)) if exception else None)
 
 
 @worker_init.connect

@@ -190,9 +190,13 @@ if (-not (Test-Path $steinitzPgn))
 
 # 8. Запуск FastAPI Backend в фоне
 Write-Host "[+] Запуск FastAPI Backend (порт 8000)..." -ForegroundColor Green
+# Журнал сервера: консоль задания не видна, поэтому json-файл с ротацией logs/api.jsonl (src/core/logging_setup.py);
+# разбор — python scripts/trace_logs.py game_id=<id> logs/api.jsonl logs/worker.jsonl.
+New-Item -ItemType Directory -Force -Path (Join-Path $root "logs") | Out-Null
 Start-Job -Name "RegenceBackend" -ScriptBlock {
     param($py, $r)
     Set-Location $r
+    $env:LOG_FILE = Join-Path $r "logs\api.jsonl"
     & $py -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 } -ArgumentList $pythonExe, $root | Out-Null
 
@@ -202,6 +206,7 @@ Write-Host "[+] Запуск Celery-воркера (фоновый анализ 
 Start-Job -Name "RegenceWorker" -ScriptBlock {
     param($py, $r)
     Set-Location $r
+    $env:LOG_FILE = Join-Path $r "logs\worker.jsonl"
     # Обе очереди (analysis — разбор партий, simulation — партии ботов в турнирах) слушает один воркер.
     & $py -m celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo -Q analysis,simulation
 } -ArgumentList $pythonExe, $root | Out-Null

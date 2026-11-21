@@ -63,3 +63,5 @@ _project_snapshot/
 
 # Claude Code: личные настройки на этом хосте
 .claude/settings.local.json
+# Журналы разработки (start_dev.ps1 пишет сюда json-журналы api и worker)
+logs/

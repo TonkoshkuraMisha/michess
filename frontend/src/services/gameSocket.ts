@@ -8,6 +8,7 @@
 
 import {API_BASE_URL, WS_BASE_URL} from '../config/api';
 import {clearToken, getToken} from './authToken';
+import {addBreadcrumb} from './breadcrumbs';
 
 type EventCallback = (data: any) => void;
 
@@ -107,6 +108,7 @@ class GameWebSocketService {
 
         socket.onopen = () => {
             if (this.ws !== socket) return;
+            addBreadcrumb('socket', 'open');
             while (this.pendingMessages.length > 0 && socket.readyState === WebSocket.OPEN) {
                 const msg = this.pendingMessages.shift();
                 if (msg) {
@@ -120,6 +122,7 @@ class GameWebSocketService {
             try {
                 const data = JSON.parse(event.data);
                 const eventType = data.event;
+                if (eventType !== 'clock_update') addBreadcrumb('socket', `event ${String(eventType)}`);
 
                 if (this.listeners[eventType]) {
                     this.listeners[eventType].forEach(cb => cb(data));
@@ -134,6 +137,7 @@ class GameWebSocketService {
 
         socket.onclose = (event) => {
             if (this.ws !== socket) return;
+            addBreadcrumb('socket', `close ${event.code}`);
             this.ws = null;
             if (event.code === 1008) {
                 // Тикет недействителен или токены отозваны (смена пароля, выход на всех устройствах)

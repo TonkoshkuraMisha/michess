@@ -39,6 +39,13 @@ from src.api.fair_play import remember_player_ip
 from src.api.rate_limit import try_consume
 from src.core import observability as obs
 from src.core.errors import DomainError, error_payload
+from src.core.logging_setup import (
+    bind_log_context,
+    end_log_context,
+    new_request_id,
+    start_log_context,
+    unbind_log_context,
+)
 from src.db.session import get_session_factory
 from src.models.user import User
 from src.services import moderation, notifications
@@ -811,6 +818,9 @@ async def _dispatch_action(
     """
     start = time.perf_counter()
     outcome = obs.OUTCOME_OK
+    # Контекст журнала: партия, к которой относится действие (game_id в сообщении), — все строки действия её несут.
+    game_id = data.get("game_id")
+    bind_log_context(game_id=game_id if isinstance(game_id, int) else None, action=action_name)
     async with session_factory() as db:
         ctx = ActionContext(user=user, db=db)
         try:
@@ -826,7 +836,12 @@ async def _dispatch_action(
             await ctx.error("internal_error")
     # action_name — ключ из ACTION_HANDLERS, то есть конечный набор значений метки.
     obs.WS_ACTIONS.labels(action_name, outcome).inc()
-    obs.WS_ACTION_SECONDS.labels(action_name).observe(time.perf_counter() - start)
+    elapsed = time.perf_counter() - start
+    obs.WS_ACTION_SECONDS.labels(action_name).observe(elapsed)
+    # Каждое действие игрока оставляет след: по нему видно, что было с партией до сбоя (ход, отказ, ошибка).
+    logger.log(logging.WARNING if outcome == obs.OUTCOME_ERROR else logging.INFO, "ws_action",
+               extra={"outcome": outcome, "duration_ms": round(elapsed * 1000, 1)})
+    unbind_log_context("game_id", "action")
 
 
 # --- Ограничение частоты сообщений ------------------------------------------------------
@@ -940,7 +955,9 @@ async def matchmaking_endpoint(
     и затем обрабатывает сообщения одно за другим, пока соединение открыто. За поток отклонённых сообщений соединение
     закрывается.
     """
+    log_token = start_log_context(user_id=current_user.id, channel="ws", ws_id=new_request_id())
     await manager.connect(websocket, current_user.id)
+    logger.info("ws_connected")
     # Адрес игрока нужен правилу честной игры: запрос движка без токена с этого же адреса
     # во время его партии отклоняется.
     ws_client = getattr(websocket, "client", None)
@@ -962,11 +979,13 @@ async def matchmaking_endpoint(
                 await websocket.close(code=WS_CLOSE_FLOOD)
                 break
 
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as closed:
+        # Код закрытия отличает перезагрузку страницы / закрытие вкладки (1001, 1005) от обрыва сети (1006).
+        logger.info("ws_disconnected", extra={"close_code": closed.code})
     except Exception:
         logger.exception("WebSocket unexpected error for user %s", current_user.id)
     finally:
         obs.WS_CONNECTIONS.dec()
         # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
         await manager.disconnect(current_user.id, websocket)
+        end_log_context(log_token)
