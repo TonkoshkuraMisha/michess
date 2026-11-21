@@ -25,6 +25,8 @@ export interface RegisterRequest {
     experience?: string;
     strength?: string;
     invite_code?: string;
+    /** Согласие с правилами сообщества и конфиденциальностью (таск 23.1). */
+    accept_terms: boolean;
 }
 
 /** Ответ входа и смены пароля: новый токен доступа. */

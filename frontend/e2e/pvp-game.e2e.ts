@@ -22,6 +22,7 @@ async function newPlayer(browser: Browser, username: string): Promise<Page> {
     await page.getByRole('button', {name: 'Нет аккаунта? Зарегистрируйтесь'}).click();
     await page.getByPlaceholder('например, string1').fill(username);
     await page.getByPlaceholder('••••••••').fill(PASSWORD);
+    await page.getByTestId('auth-terms').check();  // согласие с правилами и конфиденциальностью (таск 23.1)
     await page.getByRole('button', {name: 'Зарегистрироваться'}).click();
 
     // После регистрации игрок уже вошёл (таск 17.8): приветствие с предложением первой партии — «Позже».

@@ -42,6 +42,8 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
     const {t, tp, language} = useI18n();
     const [isLogin, setIsLogin] = useState(!inviteCode);
     const [invite, setInvite] = useState(inviteCode ?? '');
+    // Согласие с правилами и конфиденциальностью (таск 23.1): без отметки регистрация не отправляется.
+    const [acceptTerms, setAcceptTerms] = useState(false);
     // Код из ссылки проверяется сразу: о недействительном приглашении лучше узнать до заполнения формы.
     const [inviteValid, setInviteValid] = useState<boolean | null>(null);
     useEffect(() => {
@@ -126,7 +128,7 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
             } else {
                 // Регистрация; ответы о силе необязательны (таск 17.8) — по ним сервер ставит стартовый рейтинг.
                 const created = await accountApi.register({
-                    username, password,
+                    username, password, accept_terms: acceptTerms,
                     ...(experience ? {experience} : {}),
                     ...(strength && experience !== 'new' ? {strength} : {}),
                     ...(showInvite && invite.trim() ? {invite_code: invite.trim()} : {}),
@@ -314,6 +316,16 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
                                     </select>
                                 </div>
                             )}
+                            <label className="flex items-start gap-2 text-xs text-boxwood/85" htmlFor="auth-terms">
+                                <input id="auth-terms" type="checkbox" required checked={acceptTerms} data-testid="auth-terms"
+                                       onChange={(e) => setAcceptTerms(e.target.checked)} className="mt-0.5"/>
+                                <span>
+                                    {t('auth.acceptTermsLead')}{' '}
+                                    <a href="/rules" target="_blank" rel="noreferrer" className="underline">{t('auth.termsRulesLink')}</a>{' '}
+                                    {t('auth.termsAnd')}{' '}
+                                    <a href="/privacy" target="_blank" rel="noreferrer" className="underline">{t('auth.termsPrivacyLink')}</a>
+                                </span>
+                            </label>
                         </>
                     )}
 

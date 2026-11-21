@@ -81,6 +81,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "report_not_found": "Report not found or already resolved",
     "appeal_not_flagged": "Your account is not flagged",
     "moderator_only": "Moderators only",
+    "terms_not_accepted": "Accept the community rules and privacy summary to register",
     "registration_invite_required": "Registration is by invitation only: enter your invite code",
     "registration_invite_invalid": "This invite code is invalid, expired or already used up",
     "beta_invite_not_found": "Invite not found",
@@ -128,7 +129,8 @@ ERROR_MESSAGES: dict[str, str] = {
     "team_already_member": "You are already in a team",
     "team_not_member": "You are not in a team",
     "arena_finished": "This arena is over",
-    "arena_not_running": "This arena is not running",
+    "arena_not_running": "This arena is not running",
+
     "arena_pairing_closed": "The last start of this arena has passed: the remaining games are being finished",
     "arena_no_abort": "An arena game cannot be aborted: a missing first move counts as a loss",
     "arena_fair_play": "Arenas are closed while your account is flagged by the fair-play system",

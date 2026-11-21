@@ -24,7 +24,7 @@ async function newPlayer(browser: Browser, prefix: string): Promise<Player> {
     const name = uniqueName(prefix);
     const context = await browser.newContext();
     const page = await context.newPage();
-    expect((await page.request.post(`${API}/api/v1/auth/register`, {data: {username: name, password: PASSWORD}})).ok()).toBe(true);
+    expect((await page.request.post(`${API}/api/v1/auth/register`, {data: {username: name, password: PASSWORD, accept_terms: true}})).ok()).toBe(true);
     const token = await loginPage(page, name);
     return {name, page, token};
 }

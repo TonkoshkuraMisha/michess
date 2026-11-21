@@ -172,7 +172,7 @@ jobs:
           echo "$headers" | grep -qi "content-security-policy"
           curl -fsS http://localhost:8080/game/123 | grep -q '<div id="root">'
           curl -fsS -X POST http://localhost:8080/api/v1/auth/register \
-            -H 'Content-Type: application/json' -d '{"username":"smoke_user","password":"smoke-pass-123"}'
+            -H 'Content-Type: application/json' -d '{"username":"smoke_user","password":"smoke-pass-123","accept_terms":true}'
           token=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/login \
             -d 'username=smoke_user&password=smoke-pass-123' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
           curl -fsS -X POST http://localhost:8080/api/v1/auth/ws-ticket -H "Authorization: Bearer $token"

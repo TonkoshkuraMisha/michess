@@ -325,6 +325,14 @@ def no_strength_reference(monkeypatch):
     monkeypatch.setattr(bots_base, "strength_reference_move", lambda *args, **kwargs: None)
 
 
+@pytest.fixture(autouse=True)
+def terms_consent_not_required(monkeypatch):
+    """Регистрации в тестах не передают согласие с условиями (таск 23.1); его проверяют тесты test_legal_consent.py."""
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "REQUIRE_TERMS_CONSENT", False)
+
+
 _PUBLISHED_SIMULATIONS: list[int] = []
 
 

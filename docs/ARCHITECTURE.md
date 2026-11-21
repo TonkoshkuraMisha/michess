@@ -119,7 +119,7 @@
 - **Что.** Регистрация по имени и паролю, вход, долгая сессия, смена пароля, необязательный e-mail со сбросом
   пароля, выгрузка своих данных, удаление аккаунта (анонимизация: партии остаются у соперников без имени).
 - **Файлы.** `src/api/auth.py`, `src/api/account.py`, `src/core/security.py` (хэш пароля, JWT),
-  `src/services/auth_sessions.py`, `email_links.py`, `mailer.py`, `account.py`, `onboarding.py`; клиент —
+  `src/services/auth_sessions.py`, `email_links.py`, `mailer.py`, `account.py`, `onboarding.py`, `legal.py` (согласие с условиями при регистрации, `/privacy`); клиент —
   `services/authToken.ts`, `services/account.ts` (вход, регистрация, почта, пароль, выгрузка, удаление),
   `components/AuthModal.tsx`, `components/Settings.tsx`, `components/EmailLinkPages.tsx`.
 - **Как.** Короткий access-токен (15 минут) живёт только в памяти страницы; долгий вход держит refresh-токен в cookie
