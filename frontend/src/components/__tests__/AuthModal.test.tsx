@@ -19,11 +19,27 @@ function stubFetch(reply: Response) {
 function fillAndSubmit(username: string, password: string, submitLabel: RegExp) {
     fireEvent.change(screen.getByPlaceholderText('например, string1'), {target: {value: username}});
     fireEvent.change(screen.getByPlaceholderText('••••••••'), {target: {value: password}});
+    // Согласие с правилами и конфиденциальностью (таск 23.1) есть только в режиме регистрации.
+    const terms = screen.queryByTestId('auth-terms');
+    if (terms) fireEvent.click(terms);
     fireEvent.click(screen.getByRole('button', {name: submitLabel}));
 }
 
 beforeEach(() => {
     localStorage.clear();
+});
+
+describe('AuthModal: согласие с условиями (таск 23.1)', () => {
+    it('в регистрации есть обязательный флажок со ссылками на правила и конфиденциальность; во входе его нет', () => {
+        render(<AuthModal onSuccess={vi.fn()}/>);
+        expect(screen.queryByTestId('auth-terms')).toBeNull();
+        fireEvent.click(screen.getByRole('button', {name: 'Нет аккаунта? Зарегистрируйтесь'}));
+        const terms = screen.getByTestId('auth-terms');
+        expect(terms).toBeRequired();
+        expect(terms).not.toBeChecked();
+        expect(screen.getByRole('link', {name: 'правила сообщества'})).toHaveAttribute('href', '/rules');
+        expect(screen.getByRole('link', {name: 'сводку о конфиденциальности'})).toHaveAttribute('href', '/privacy');
+    });
 });
 
 afterEach(() => {
@@ -133,7 +149,7 @@ describe('AuthModal: регистрация', () => {
         expect(getToken()).toBe('jwt-new');
         const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toMatch(/\/api\/v1\/auth\/register$/);
-        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass', experience: 'new'});
+        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass', accept_terms: true, experience: 'new'});
 
         fireEvent.click(screen.getByTestId('auth-first-game'));
         expect(onSuccess).toHaveBeenCalledWith('jwt-new');
@@ -175,7 +191,7 @@ describe('AuthModal: регистрация', () => {
 
         await screen.findByTestId('auth-welcome');
         const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass'});
+        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass', accept_terms: true});
         fireEvent.click(screen.getByRole('button', {name: 'Позже'}));
         expect(onSuccess).toHaveBeenCalledWith('jwt-new');
         expect(onFirstGame).not.toHaveBeenCalled();

@@ -32,7 +32,7 @@ from src.db import redis as redis_module
 from src.db.session import get_db
 from src.models.user import RATING_CATEGORIES, User
 from src.schemas.user import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, UserCreate, UserResponse, username_key
-from src.services import auth_sessions, beta, product_metrics
+from src.services import auth_sessions, beta, legal, product_metrics
 from src.services.onboarding import starting_rating
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -71,7 +71,8 @@ def _is_reserved(username: str) -> bool:
 async def register_user(user_in: UserCreate, request: Request, db: AsyncSession = Depends(get_db)):
     """
     Регистрация (без входа): создаёт запись в users и возвращает данные нового игрока; токен выдаёт отдельный
-    запрос /auth/login. Порядок проверок: лимит регистраций с адреса → код-приглашение (при закрытой
+    запрос /auth/login. Порядок проверок: лимит регистраций с адреса → согласие с условиями (terms_not_accepted,
+    400; таск 23.1) → код-приглашение (при закрытой
     регистрации) → зарезервированное имя → занятость имени без учёта регистра. Отказы — коды
     too_many_registrations (429), registration_invite_* (403), username_reserved и username_taken (400).
     """
@@ -80,6 +81,8 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
         settings.RATE_LIMIT_REGISTER_PER_IP, settings.RATE_LIMIT_REGISTER_WINDOW_S,
         "too_many_registrations",
     )
+
+    legal.require_consent(user_in.accept_terms, settings.REQUIRE_TERMS_CONSENT)
 
     # Закрытая регистрация (таск 24.4): без кода-приглашения дальше не идём — и занятость имён не раскрываем.
     invite_code = beta.normalize_code(user_in.invite_code)
@@ -114,6 +117,7 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
         hashed_password=get_password_hash(user_in.password),
         **ratings,
     )
+    legal.record_consent(new_user, user_in.accept_terms)
     db.add(new_user)
     # Код списывается в той же транзакции, что и создание аккаунта. При открытой регистрации код необязателен:
     # действующий засчитывается (видно, кто пришёл по приглашению), недействительный — не мешает.

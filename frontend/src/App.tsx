@@ -27,6 +27,7 @@ import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
 import {ImportPage} from './components/gameImport/ImportPage';
 import {TransparencyPage} from './components/TransparencyPage';
+import {PrivacyPage} from './components/PrivacyPage';
 import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
 import {ConferencesPage} from './components/arena/ConferencesPage';
 import {TeamsPage} from './components/social/TeamsPage';
@@ -782,6 +783,7 @@ export default function App() {
                         <Route path="/feed" element={<FeedPage/>}/>
                         <Route path="/feed/post/:postId" element={<PostPage/>}/>
                         <Route path="/rules" element={<CommunityRulesPage/>}/>
+                        <Route path="/privacy" element={<PrivacyPage/>}/>
                         {/* Витрина общих компонентов дизайна — в меню нет (docs/design-system.md). */}
                         <Route path="/design" element={<DesignGallery/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>

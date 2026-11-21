@@ -52,6 +52,10 @@ class User(Base):
     # Подтверждённый e-mail (таск 17.5) — необязателен; нужен для сброса пароля. Хранится только подтверждённый:
     # адрес, который ещё не подтвердили, живёт в одноразовой ссылке (EmailToken), и чужой адрес так не занять.
     email: Mapped[str | None] = mapped_column(String(254), unique=True, index=True, nullable=True)
+    # Согласие с условиями при регистрации (таск 23.1, src/services/legal.py): редакция документов и момент согласия.
+    # У архивных игроков из PGN, ботов и аккаунтов, созданных до появления согласия, — NULL.
+    terms_version: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # ELO-рейтинг по отдельности для каждой категории контроля времени (как на chess.com и
     # lichess.org) — единого «общего» рейтинга больше нет, пуля/блиц/рапид/классика не

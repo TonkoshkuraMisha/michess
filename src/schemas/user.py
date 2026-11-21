@@ -61,6 +61,8 @@ class UserCreate(BaseModel):
     strength: StrengthBand | None = None
     # Код-приглашение (таск 24.4): обязателен при закрытой регистрации (REGISTRATION_INVITE_ONLY).
     invite_code: str | None = Field(None, max_length=64)
+    # Согласие с условиями (таск 23.1): обязательно при REQUIRE_TERMS_CONSENT, иначе 400 terms_not_accepted.
+    accept_terms: bool = False
 
     @field_validator("username")
     @classmethod

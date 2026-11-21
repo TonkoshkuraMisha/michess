@@ -203,6 +203,7 @@ describe('регистрация по приглашению', () => {
     function fill(username: string, password: string) {
         fireEvent.change(screen.getByPlaceholderText('например, string1'), {target: {value: username}});
         fireEvent.change(screen.getByPlaceholderText('••••••••'), {target: {value: password}});
+        fireEvent.click(screen.getByTestId('auth-terms'));  // согласие с условиями (таск 23.1)
     }
 
     it('открытая регистрация: поля кода нет, код не отправляется', async () => {
@@ -212,7 +213,7 @@ describe('регистрация по приглашению', () => {
         expect(screen.queryByTestId('auth-invite')).toBeNull();
         fill('alice', 'secret-pass');
         await act(async () => fireEvent.click(screen.getByRole('button', {name: /Зарегистрироваться/})));
-        expect(register(fetchMock)).toEqual([{username: 'alice', password: 'secret-pass'}]);
+        expect(register(fetchMock)).toEqual([{username: 'alice', password: 'secret-pass', accept_terms: true}]);
     });
 
     it('закрытая регистрация: код обязателен; отказ сервера — понятный текст', async () => {
@@ -225,7 +226,7 @@ describe('регистрация по приглашению', () => {
         fill('alice', 'secret-pass');
         fireEvent.change(screen.getByTestId('auth-invite'), {target: {value: ' k7qf2mxn9b '}});
         await act(async () => fireEvent.click(screen.getByRole('button', {name: /Зарегистрироваться/})));
-        expect(register(fetchMock)).toEqual([{username: 'alice', password: 'secret-pass', invite_code: 'k7qf2mxn9b'}]);
+        expect(register(fetchMock)).toEqual([{username: 'alice', password: 'secret-pass', accept_terms: true, invite_code: 'k7qf2mxn9b'}]);
         expect(screen.getByRole('alert')).toHaveTextContent('Код-приглашение недействителен, истёк или уже исчерпан');
     });
 

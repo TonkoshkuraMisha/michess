@@ -7,7 +7,7 @@ const PASSWORD = 'e2e-pass-12345';
 
 test('задачи: выдача, показ решения, следующая задача и история', async ({page, request}) => {
     const username = `puz_${Date.now().toString(36)}`;
-    expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD}})).ok()).toBe(true);
+    expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD, accept_terms: true}})).ok()).toBe(true);
     // Вход в контексте страницы: refresh-cookie восстановит его при загрузке (таск 17.5).
     expect((await page.request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}})).ok()).toBe(true);
 
@@ -33,7 +33,7 @@ test('задачи: выдача, показ решения, следующая 
 
 test('приёмы: объяснение темы, показ на доске и тренировка на ступени', async ({page, request}) => {
     const username = `thm_${Date.now().toString(36)}`;
-    expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD}})).ok()).toBe(true);
+    expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD, accept_terms: true}})).ok()).toBe(true);
     // Вход в контексте страницы: refresh-cookie восстановит его при загрузке (таск 17.5).
     expect((await page.request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}})).ok()).toBe(true);
 

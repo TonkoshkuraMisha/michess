@@ -25,7 +25,7 @@ export async function loginNewPlayer(page: Page, request: APIRequestContext, pre
     let username = process.env.E2E_SHARED_PLAYER === '0' ? undefined : players.get('shared');
     if (!username) {
         username = `${prefix}_${Date.now().toString(36)}`;
-        expect((await request.post(`${API}/api/v1/auth/register`, {data: {username, password: PASSWORD}})).ok()).toBe(true);
+        expect((await request.post(`${API}/api/v1/auth/register`, {data: {username, password: PASSWORD, accept_terms: true}})).ok()).toBe(true);
         players.set('shared', username);
     }
     return loginPage(page, username);

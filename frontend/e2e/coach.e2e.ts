@@ -7,7 +7,7 @@ const PASSWORD = 'e2e-pass-12345';
 
 test('разбор партии: наставник объясняет зевок и мат', async ({page, request}) => {
     const username = `coach_${Date.now().toString(36)}`;
-    expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD}})).ok()).toBe(true);
+    expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD, accept_terms: true}})).ok()).toBe(true);
     const login = await request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}});
     const {access_token: token} = await login.json();
 
