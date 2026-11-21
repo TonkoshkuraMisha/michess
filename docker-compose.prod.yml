@@ -5,6 +5,9 @@
 # Наружу открыт только web (nginx, порт 80): API, БД и Redis доступны лишь внутри сети compose.
 # Поэтому API может доверять X-Forwarded-For от любого адреса этой сети (FORWARDED_ALLOW_IPS).
 
+# Имя проекта задано явно: тома и сеть называются regence_*, а не по имени папки.
+name: regence
+
 x-backend: &backend
   build: .
   image: regence-backend:latest
