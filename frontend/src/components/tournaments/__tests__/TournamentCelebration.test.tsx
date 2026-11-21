@@ -1,5 +1,5 @@
-// Праздник призёра турнира (17.11): кубок цвета места, фанфары, один раз на турнир, повтор кнопкой; и у доски
-// после последней партии.
+// Экран окончания турнира (17.11, таблица — 21.11): кубок цвета места и фанфары у призёра, значок места без фанфар
+// у остальных, таблица участников и сводка игрока, один раз на турнир, повтор кнопкой; и у доски после последней партии.
 
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
@@ -69,7 +69,7 @@ describe('праздник призёра', () => {
         expect(shouldCelebrate(42)).toBe(true);
     });
 
-    it('страница турнира: праздник при первом взгляде, повтор кнопкой; без места в тройке — нет', async () => {
+    it('страница турнира: экран при первом взгляде, повтор кнопкой; вне тройки — значок места без фанфар', async () => {
         vi.spyOn(soundEngine, 'playFanfare').mockImplementation(() => undefined);
         stub(finished(2));
         const view = render(<MemoryRouter initialEntries={['/tournaments/41']}><Routes>
@@ -84,13 +84,35 @@ describe('праздник призёра', () => {
         view.unmount();
 
         localStorage.clear();
+        const fanfare = vi.spyOn(soundEngine, 'playFanfare').mockClear();
         stub(finished(5));
         render(<MemoryRouter initialEntries={['/tournaments/41']}><Routes>
             <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>
         </Routes></MemoryRouter>);
-        await screen.findByTestId('tournament-view');
-        expect(screen.queryByTestId('tournament-celebration')).toBeNull();
-        expect(screen.queryByTestId('celebrate-again')).toBeNull();
+        expect(await screen.findByTestId('celebration-title')).toHaveTextContent('Турнир завершён');
+        expect(screen.getByTestId('celebration-badge')).toHaveTextContent('5');
+        expect(screen.queryByTestId('celebration-confetti')).toBeNull();
+        expect(fanfare).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByTestId('celebration-close'));
+        expect(screen.getByTestId('celebrate-again')).toHaveTextContent('Итоги');
+    });
+
+    it('таблица участников и сводка: строка игрока подсвечена, рейтинги и очки на месте', () => {
+        const rows = [
+            {key: 1, place: 1, name: 'Морфи', rating: 2100, score: '2', mine: false},
+            {key: 2, place: 2, name: 'misha', rating: 1500, score: '1,5', mine: true},
+            {key: 3, place: 3, name: 'Андерсен', rating: null, score: '0,5', mine: false},
+        ];
+        render(<TournamentCelebration place={2} title="Круговой · 3" size={3} onClose={vi.fn()} rows={rows}
+                                      stats={{points: '1,5', wins: 1, draws: 1, losses: 0, rating: 1500}}/>);
+        expect(screen.getByTestId('celebration-row-2')).toHaveAttribute('aria-current', 'true');
+        expect(screen.getByTestId('celebration-row-1')).not.toHaveAttribute('aria-current');
+        expect(screen.getByTestId('celebration-row-1')).toHaveTextContent('Морфи');
+        expect(screen.getByTestId('celebration-row-1')).toHaveTextContent('2100');
+        expect(screen.getByTestId('celebration-row-2')).toHaveTextContent('1,5');
+        expect(screen.getAllByTestId('player-avatar')).toHaveLength(3);
+        expect(screen.getByTestId('celebration-stat-record')).toHaveTextContent('1/1/0');
+        expect(screen.getByTestId('celebration-stat-rating')).toHaveTextContent('1500');
     });
 
     it('у доски: после последней партии, когда турнир закончен и игрок в тройке', async () => {

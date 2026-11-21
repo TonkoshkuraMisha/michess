@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/tournaments/TournamentCelebration.tsx ---
-// Праздник призёра (решение владельца, 17.11): после окончания любого турнира, если игрок занял 1–3 место, —
-// полноэкранная сцена: лучи, большой кубок цвета места (золото, серебро, бронза) с бликом, лавровый венок, конфетти
-// и фанфары. Всё рисуется кодом (SVG, canvas, Web Audio) — без чужих картинок и записей. Показывается один раз на
+// Экран окончания турнира (решение владельца, 17.11; итоговая таблица — 21.11): после окончания любого турнира или
+// арены — полноэкранное окно. Призёру (1–3 место): лучи, большой кубок цвета места (золото, серебро, бронза) с бликом,
+// лавровый венок, конфетти и фанфары. Остальным — спокойный значок места без фанфар. Рядом с кубком — сводка игрока
+// (очки, победы/ничьи/поражения, рейтинг) и прокручиваемая таблица всех участников с аватарами, рейтингами и очками;
+// строка игрока подсвечена и прокручена в видимую область (строки готовит services/tournamentResults.ts). Всё рисуется кодом (SVG, canvas, Web Audio) — без чужих картинок и записей. Показывается один раз на
 // турнир (shouldCelebrate / markCelebrated; ключ — номер турнира или строка вида «arena-5» для арен, 33.5); повторить
 // можно кнопкой. При «уменьшить движение» — без конфетти и вращения.
 // Единственное хранилище — localStorage с ключом regence_celebrated_<id>. Фанфары — services/soundEngine.ts.
@@ -11,6 +13,8 @@ import {useEffect, useRef} from 'react';
 import {X} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {soundEngine} from '../../services/soundEngine';
+import type {ResultRow, ResultStats} from '../../services/tournamentResults';
+import {PlayerAvatar} from '../PlayerAvatar';
 
 // Префикс ключа localStorage: отметка «праздник для этого турнира уже показан».
 const STORAGE_PREFIX = 'regence_celebrated_';
@@ -225,32 +229,108 @@ function Trophy({place}: { place: 1 | 2 | 3 }) {
     );
 }
 
+// Палитра для места вне тройки призёров: сдержанный синевато-серый, без фанфар и конфетти.
+const PLAIN: Medal = {
+    light: '#e6edf7', main: '#8fa3c0', dark: '#3d4a60', glow: 'rgba(143, 163, 192, 0.35)', ray: 'rgba(160, 180, 210, 0.08)',
+    key: 'third',
+};
+
 export interface CelebrationProps {
     place: number;
     /** Название турнира на языке игрока. */
     title: string;
     size: number;
     onClose: () => void;
+    /** Итоговая таблица всех участников; без неё окно показывает только кубок (как раньше). */
+    rows?: ResultRow[];
+    /** Сводка игрока над таблицей. */
+    stats?: ResultStats | null;
 }
 
-/** Полноэкранный праздник: играет фанфары, закрывается кнопкой или Escape; место ограничено диапазоном 1–3. */
-export function TournamentCelebration({place, title, size, onClose}: CelebrationProps) {
+/** Значок места вне тройки: круг с номером вместо кубка. */
+function PlaceBadge({place}: { place: number }) {
+    return (
+        <div className="flex items-center justify-center w-28 h-28 rounded-full border-4 text-5xl font-black"
+             style={{borderColor: PLAIN.main, color: PLAIN.light, background: `radial-gradient(circle, ${PLAIN.dark}, transparent 85%)`,
+                 fontFamily: "Georgia, 'Times New Roman', serif"}} data-testid="celebration-badge">
+            {place}
+        </div>
+    );
+}
+
+/** Таблица участников: место, аватар, имя, рейтинг, очки; прокручивается, строка игрока подсвечена и видна сразу. */
+function ResultsTable({rows}: { rows: ResultRow[] }) {
     const {t} = useI18n();
+    const mineRef = useRef<HTMLLIElement>(null);
+    useEffect(() => {
+        mineRef.current?.scrollIntoView?.({block: 'center'});
+    }, [rows]);
+    return (
+        <section className="w-full rounded-xl bg-black/40 border border-amber-200/20 flex flex-col min-h-0" data-testid="celebration-table">
+            <h3 className="px-4 py-2 text-sm font-bold uppercase tracking-wide text-amber-200/90 border-b border-amber-200/15">
+                {t('celebration.standings')}
+            </h3>
+            <ol className="overflow-y-auto max-h-[38vh] lg:max-h-[56vh] divide-y divide-amber-200/10">
+                {rows.map((r) => (
+                    <li key={r.key} ref={r.mine ? mineRef : undefined} data-testid={`celebration-row-${r.key}`} aria-current={r.mine ? 'true' : undefined}
+                        className={`flex items-center gap-3 px-4 py-2 text-left ${r.mine ? 'bg-amber-300/20 font-bold' : ''}`}>
+                        <span className="w-7 text-right font-mono text-amber-200/80">{r.place}</span>
+                        <PlayerAvatar username={r.name} avatar={r.avatar} className="w-8 h-8 rounded-full"/>
+                        <span className="flex-1 truncate text-amber-50">{r.name}</span>
+                        {r.rating !== null && <span className="text-xs text-amber-200/70 font-mono">{r.rating}</span>}
+                        <span className="w-12 text-right font-mono text-amber-100">{r.score}</span>
+                    </li>
+                ))}
+            </ol>
+        </section>
+    );
+}
+
+/** Сводка игрока: очки, победы/ничьи/поражения, рейтинг — плитками под местом. */
+function StatsStrip({stats}: { stats: ResultStats }) {
+    const {t} = useI18n();
+    const cells = [
+        {key: 'points', label: t('celebration.stats.points'), value: stats.points},
+        {key: 'record', label: t('celebration.stats.record'), value: `${stats.wins}/${stats.draws}/${stats.losses}`},
+        ...(stats.rating !== null ? [{key: 'rating', label: t('celebration.stats.rating'), value: String(stats.rating)}] : []),
+    ];
+    return (
+        <dl className="flex flex-wrap justify-center gap-2" data-testid="celebration-stats">
+            {cells.map((c) => (
+                <div key={c.key} className="min-w-20 rounded-lg bg-black/35 border border-amber-200/20 px-3 py-1.5">
+                    <dt className="text-[11px] uppercase tracking-wide text-amber-200/70">{c.label}</dt>
+                    <dd className="text-lg font-bold text-amber-50" data-testid={`celebration-stat-${c.key}`}>{c.value}</dd>
+                </div>
+            ))}
+        </dl>
+    );
+}
+
+/**
+ * Полноэкранный экран итогов: у призёра играют фанфары и сыплется конфетти; закрывается кнопкой или Escape.
+ * Место 1–3 — кубок цвета места; ниже — значок с номером. С rows рядом с кубком появляется таблица участников.
+ */
+export function TournamentCelebration({place, title, size, onClose, rows, stats}: CelebrationProps) {
+    const {t} = useI18n();
+    const podium = place >= 1 && place <= 3;
     const rank = (Math.min(Math.max(place, 1), 3)) as 1 | 2 | 3;
-    const medal = MEDALS[rank];
-    const calm = reducedMotion();
+    const medal = podium ? MEDALS[rank] : PLAIN;
+    const heading = podium ? t(`celebration.${medal.key}`) : t('celebration.finished');
+    const calm = reducedMotion() || !podium;
+    const withTable = rows !== undefined && rows.length > 0;
 
     useEffect(() => {
-        soundEngine.playFanfare(rank);
+        if (podium) soundEngine.playFanfare(rank);
         const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [rank, onClose]);
+    }, [podium, rank, onClose]);
 
     return (
-        <div role="dialog" aria-modal="true" aria-label={t(`celebration.${medal.key}`)} data-testid="tournament-celebration"
-             className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
-             style={{                 background: `radial-gradient(circle at 50% 40%, ${medal.glow} 0%, transparent 42%), rgba(10, 7, 3, 0.985)`,                 backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',             }}>
+        <div role="dialog" aria-modal="true" aria-label={heading} data-testid="tournament-celebration"
+             className="fixed inset-0 z-[100] overflow-y-auto overflow-x-hidden"
+             style={{background: `radial-gradient(circle at 50% 40%, ${medal.glow} 0%, transparent 42%), rgba(10, 7, 3, 0.985)`,
+                 backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)'}}>
             <style>{`
                 @keyframes regence-rays { to { transform: rotate(360deg); } }
                 @keyframes regence-pop { 0% { transform: scale(0.2) translateY(60px); opacity: 0; }
@@ -266,8 +346,8 @@ export function TournamentCelebration({place, title, size, onClose}: Celebration
                     .regence-leaf, .regence-shine, .regence-anim { animation: none !important; }
                 }
             `}</style>
-            {/* Лучи */}
-            <div aria-hidden="true" className="regence-anim absolute left-1/2 top-[42%] w-[160vmax] h-[160vmax] -translate-x-1/2 -translate-y-1/2"
+            {/* Лучи (фон, не прокручивается) */}
+            <div aria-hidden="true" className="regence-anim fixed left-1/2 top-[42%] w-[160vmax] h-[160vmax] -translate-x-1/2 -translate-y-1/2 pointer-events-none"
                  style={{
                      background: `repeating-conic-gradient(${medal.ray} 0deg 6deg, transparent 6deg 18deg)`,
                      maskImage: 'radial-gradient(circle, black 0%, transparent 60%)',
@@ -275,27 +355,31 @@ export function TournamentCelebration({place, title, size, onClose}: Celebration
                      animation: calm ? undefined : 'regence-rays 40s linear infinite',
                  }}/>
             {!calm && <Confetti/>}
-            <div className="relative z-[101] flex flex-col items-center gap-3 px-4 text-center">
-                <h2 className="regence-anim text-4xl sm:text-6xl font-black uppercase"
-                    style={{
-                        color: medal.light, textShadow: `0 0 24px ${medal.glow}, 0 4px 0 ${medal.dark}`,
-                        fontFamily: "Georgia, 'Times New Roman', serif", animation: calm ? undefined : 'regence-title 0.9s ease-out both',
-                    }} data-testid="celebration-title">
-                    {t(`celebration.${medal.key}`)}
-                </h2>
-                <div className="regence-anim" style={{animation: calm ? undefined : 'regence-pop 0.9s cubic-bezier(.2,1.4,.4,1) 0.15s both'}}>
-                    <Trophy place={rank}/>
+            <div className={`relative z-[101] min-h-full flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-12 px-4 py-10 text-center ${withTable ? 'max-w-5xl mx-auto' : ''}`}>
+                <div className="flex flex-col items-center gap-3">
+                    <h2 className="regence-anim text-4xl sm:text-6xl font-black uppercase"
+                        style={{
+                            color: medal.light, textShadow: `0 0 24px ${medal.glow}, 0 4px 0 ${medal.dark}`,
+                            fontFamily: "Georgia, 'Times New Roman', serif", animation: calm ? undefined : 'regence-title 0.9s ease-out both',
+                        }} data-testid="celebration-title">
+                        {heading}
+                    </h2>
+                    <div className="regence-anim" style={{animation: calm ? undefined : 'regence-pop 0.9s cubic-bezier(.2,1.4,.4,1) 0.15s both'}}>
+                        {podium ? <Trophy place={rank}/> : <PlaceBadge place={place}/>}
+                    </div>
+                    <p className="text-lg sm:text-2xl font-bold text-amber-100" data-testid="celebration-subtitle">{title}</p>
+                    <p className="text-base sm:text-lg text-amber-200/90">{t('celebration.place', {place, size})}</p>
+                    {stats && <StatsStrip stats={stats}/>}
+                    <button type="button" onClick={onClose} autoFocus data-testid="celebration-close"
+                            className="mt-2 px-6 py-2.5 rounded-full font-bold text-lg shadow-lg cursor-pointer"
+                            style={{background: `linear-gradient(180deg, ${medal.light}, ${medal.main})`, color: medal.dark}}>
+                        {t('celebration.continue')}
+                    </button>
                 </div>
-                <p className="text-lg sm:text-2xl font-bold text-amber-100" data-testid="celebration-subtitle">{title}</p>
-                <p className="text-base sm:text-lg text-amber-200/90">{t('celebration.place', {place: rank, size})}</p>
-                <button type="button" onClick={onClose} autoFocus data-testid="celebration-close"
-                        className="mt-2 px-6 py-2.5 rounded-full font-bold text-lg shadow-lg cursor-pointer"
-                        style={{background: `linear-gradient(180deg, ${medal.light}, ${medal.main})`, color: medal.dark}}>
-                    {t('celebration.continue')}
-                </button>
+                {withTable && <div className="w-full lg:w-[26rem] lg:shrink-0"><ResultsTable rows={rows}/></div>}
             </div>
             <button type="button" onClick={onClose} aria-label={t('celebration.continue')}
-                    className="absolute top-3 right-3 z-[103] p-2 rounded-full bg-black/40 text-white hover:bg-black/60">
+                    className="fixed top-3 right-3 z-[103] p-2 rounded-full bg-black/40 text-white hover:bg-black/60">
                 <X size={20}/>
             </button>
         </div>

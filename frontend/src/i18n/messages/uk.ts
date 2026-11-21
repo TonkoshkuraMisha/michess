@@ -2429,6 +2429,10 @@ export const uk: Messages = {
         place: 'Місце {place} із {size}',
         continue: 'Продовжити',
         again: 'Відсвяткувати ще раз',
+        finished: 'Турнір завершено',
+        standings: 'Підсумкова таблиця',
+        results: 'Підсумки',
+        stats: {points: 'Очки', record: 'П / Н / Пр', rating: 'Рейтинг'},
     },
     social: {
         search: 'Знайти гравця',

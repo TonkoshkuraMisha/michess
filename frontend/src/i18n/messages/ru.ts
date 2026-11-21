@@ -2429,6 +2429,10 @@ export const ru: Messages = {
         place: 'Место {place} из {size}',
         continue: 'Продолжить',
         again: 'Отпраздновать ещё раз',
+        finished: 'Турнир завершён',
+        standings: 'Итоговая таблица',
+        results: 'Итоги',
+        stats: {points: 'Очки', record: 'П / Н / Пр', rating: 'Рейтинг'},
     },
     social: {
         search: 'Найти игрока',

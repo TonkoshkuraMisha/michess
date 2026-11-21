@@ -2425,6 +2425,10 @@ export const en = {
         place: 'Place {place} of {size}',
         continue: 'Continue',
         again: 'Celebrate again',
+        finished: 'Tournament finished',
+        standings: 'Final standings',
+        results: 'Results',
+        stats: {points: 'Points', record: 'W / D / L', rating: 'Rating'},
     },
     social: {
         search: 'Find a player',
